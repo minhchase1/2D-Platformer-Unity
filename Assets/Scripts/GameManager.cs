@@ -110,7 +110,7 @@ public class GameManager : MonoBehaviour
 
 
         levelCompletePanel.SetActive(true);
-        leveCompletePanelTitle.text = "LEVEL COMPLETE";
+        leveCompletePanelTitle.text = "Siuuuuuuuuuuuu";
 
 
 
