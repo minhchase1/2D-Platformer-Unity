@@ -1,79 +1,123 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
+using System.Collections;
 
 public class UIManager : MonoBehaviour
 {
     public static UIManager instance;
-    public GameObject mobileControls;
 
-    public bool fadeToBlack, fadeFromBlack;
-    public Image blackScreen;
-    public float fadeSpeed = 2f;
+    [Header("Fade Settings")]
+    public Image fadeScreen;              // Ảnh phủ mờ (Image màu đen)
+    public float fadeSpeed = 2f;          // Tốc độ mờ sáng/tối
+    public bool fadeToBlack;              // Trạng thái chuyển sang đen
+    public bool fadeFromBlack;            // Trạng thái sáng dần
 
-    //player reference
-
-    public PlayerController playerController;
-
+    [Header("Mobile Controls (Optional)")]
+    [SerializeField] private GameObject mobileControls;
 
     private void Awake()
     {
-        instance = this;
+        // Đảm bảo chỉ có 1 instance
+        if (instance == null)
+            instance = this;
+        else
+            Destroy(gameObject);
     }
 
-    public void DisableMobileControls()
+    private void Start()
     {
-        mobileControls.SetActive(false);
-    }
-    public void EnableMobileControls()
-    {
-        mobileControls.SetActive(true);
+        // Khi bắt đầu game, fade từ đen sang sáng
+        if (fadeScreen != null)
+        {
+            fadeScreen.color = new Color(0, 0, 0, 1); // Bắt đầu đen toàn màn
+            StartCoroutine(FadeIn());
+        }
+        else
+        {
+            Debug.LogError("⚠️ fadeScreen chưa được gán trong UIManager!");
+        }
     }
 
     private void Update()
     {
-        UpdateFade();
-    }
-
-    private void UpdateFade()
-    {
         if (fadeToBlack)
         {
-            FadeToBlack();
-        }
-        else if (fadeFromBlack)
-        {
-            FadeFromBlack();
-        }
-    }
+            fadeScreen.color = new Color(
+                fadeScreen.color.r,
+                fadeScreen.color.g,
+                fadeScreen.color.b,
+                Mathf.MoveTowards(fadeScreen.color.a, 1f, fadeSpeed * Time.deltaTime)
+            );
 
-    private void FadeToBlack()
-    {
-        FadeScreen(1f);
-
-        if (blackScreen.color.a >= 1f)
-        {
-            fadeToBlack = false;
-        }
-    }
-
-    private void FadeFromBlack()
-    {
-        FadeScreen(0f);
-
-        if (blackScreen.color.a <= 0f)
-        {
-            if(playerController.controlmode == Controls.mobile)
+            if (fadeScreen.color.a >= 1f)
             {
-                EnableMobileControls();
+                fadeToBlack = false;
+                Debug.Log("🌑 Fade To Black hoàn tất");
             }
-            fadeFromBlack = false;
+        }
+
+        if (fadeFromBlack)
+        {
+            fadeScreen.color = new Color(
+                fadeScreen.color.r,
+                fadeScreen.color.g,
+                fadeScreen.color.b,
+                Mathf.MoveTowards(fadeScreen.color.a, 0f, fadeSpeed * Time.deltaTime)
+            );
+
+            if (fadeScreen.color.a <= 0f)
+            {
+                fadeFromBlack = false;
+                Debug.Log("🌅 Fade From Black hoàn tất");
+            }
         }
     }
 
-    private void FadeScreen(float targetAlpha)
+    // Gọi để mờ dần sang màu đen
+    public void FadeToBlack()
     {
-        Color currentColor = blackScreen.color;
-        float newAlpha = Mathf.MoveTowards(currentColor.a, targetAlpha, fadeSpeed * Time.deltaTime);
-        blackScreen.color = new Color(currentColor.r, currentColor.g, currentColor.b, newAlpha);
+        fadeToBlack = true;
+        fadeFromBlack = false;
+    }
+
+    // Gọi để sáng dần ra (từ đen sang trong suốt)
+    public void FadeFromBlack()
+    {
+        fadeFromBlack = true;
+        fadeToBlack = false;
+    }
+
+    // Coroutine tự fade in khi game bắt đầu
+    public IEnumerator FadeIn()
+    {
+        Debug.Log("🌄 Bắt đầu FadeIn...");
+
+        fadeFromBlack = true;
+
+        while (fadeScreen.color.a > 0f)
+        {
+            fadeScreen.color = new Color(
+                fadeScreen.color.r,
+                fadeScreen.color.g,
+                fadeScreen.color.b,
+                Mathf.MoveTowards(fadeScreen.color.a, 0f, fadeSpeed * Time.deltaTime)
+            );
+            yield return null;
+        }
+
+        fadeFromBlack = false;
+        Debug.Log("🌅 Fade From Black hoàn tất");
+
+        // ✅ Thêm dòng này để ẩn luôn ảnh mờ khi fade xong
+        fadeScreen.gameObject.SetActive(false);
+
+        Debug.Log("✅ FadeIn hoàn tất");
+    }
+
+
+    public void DisableMobileControls()
+    {
+        if (mobileControls != null)
+            mobileControls.SetActive(false);
     }
 }

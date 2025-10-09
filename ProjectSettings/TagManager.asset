@@ -6,6 +6,9 @@ TagManager:
   tags:
   - killzone
   - Coin
+  - DeathZone
+  - KillZone
+  - Ground
   layers:
   - Default
   - TransparentFX
@@ -14,7 +17,7 @@ TagManager:
   - Water
   - UI
   - CameraBounds
-  - 
+  - MovableBox
   - 
   - 
   - 
@@ -48,6 +51,9 @@ TagManager:
     locked: 0
   - name: Trees
     uniqueID: 2504674865
+    locked: 0
+  - name: Gameplay
+    uniqueID: 2074898199
     locked: 0
   - name: Props
     uniqueID: 3589227467

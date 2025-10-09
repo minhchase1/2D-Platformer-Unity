@@ -1,28 +1,35 @@
+﻿using UnityEngine;
 using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.SceneManagement;
 
 public class ExitTrigger : MonoBehaviour
 {
-    //public Animator anim;
+    [Header("Fade Duration (optional)")]
+    public float fadeDuration = 0.5f; // thời gian fade mượt
+
     private void OnTriggerEnter2D(Collider2D collision)
     {
-        if (collision.gameObject.tag == "Player")
+        if (collision.CompareTag("Player"))
         {
-            StartCoroutine("LevelExit");
+            StartCoroutine(LevelExit());
         }
     }
 
-    IEnumerator LevelExit()
+    private IEnumerator LevelExit()
     {
-        //anim.SetTrigger("Exit");
-        yield return new WaitForSeconds(0.1f);
+        // Fade mượt nếu UIManager có
+        if (UIManager.instance != null)
+        {
+            UIManager.instance.FadeToBlack();
+            yield return new WaitForSeconds(fadeDuration); // chờ fade xong
+        }
 
-        UIManager.instance.fadeToBlack = true;
+        // Gọi GameManager load level mới
+        if (GameManager.instance != null)
+        {
+            GameManager.instance.LevelComplete();
+        }
 
-        yield return new WaitForSeconds(2f);
-        // Do something after flag anim
-        GameManager.instance.LevelComplete();
+        // Tắt trigger để không bị gọi lại
+        GetComponent<Collider2D>().enabled = false;
     }
 }
