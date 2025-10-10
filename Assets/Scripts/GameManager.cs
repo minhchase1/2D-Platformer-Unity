@@ -200,8 +200,6 @@ public class GameManager : MonoBehaviour
     // ============================
     public void LevelComplete()
     {
-        if (levelCompletePanel != null)
-            levelCompletePanel.SetActive(true);
 
         if (levelCompleteTitle != null)
             levelCompleteTitle.text = "LEVEL COMPLETE";

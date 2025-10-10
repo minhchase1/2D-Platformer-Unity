@@ -130,15 +130,11 @@ public class PlayerController : MonoBehaviour
         if (moveInput > 0 && !isFacingRight) Flip();
         if (moveInput < 0 && isFacingRight) Flip();
 
-        // Dòng Debug đã được vô hiệu hóa
-        // Debug.Log($"[GroundCheck] grounded={isGrounded}, groundCheckPos={groundCheck.position}, radius={groundCheckRadius}, layer=8");
-    }
+
 
     private void Jump(Vector2 force)
     {
-        rb.velocity = new Vector2(rb.velocity.x, 0f);
-        rb.AddForce(force, ForceMode2D.Impulse);
-        jumpsLeft--;
+
     }
 
     private IEnumerator DoDash()

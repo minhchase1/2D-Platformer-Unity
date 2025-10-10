@@ -108,26 +108,3 @@ public class HealthManager : MonoBehaviour
         }
     }
 
-    // Hàm này vẫn có thể được gọi từ nơi khác nếu cần, nhưng không còn dùng trong logic mất mạng
-    public void RespawnPlayer()
-    {
-        if (player == null)
-        {
-            player = FindObjectOfType<PlayerController>()?.gameObject;
-        }
-
-        if (player != null)
-        {
-            player.transform.position = GameManager.instance.playerStartPosition;
-
-            if (!player.activeSelf)
-            {
-                player.SetActive(true);
-            }
-        }
-        else
-        {
-            Debug.LogError("[HealthManager] Không tìm thấy Player để respawn!");
-        }
-    }
-}
