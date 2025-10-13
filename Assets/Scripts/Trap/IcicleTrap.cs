@@ -3,34 +3,36 @@ using System.Collections;
 
 public class IcicleTrap : MonoBehaviour
 {
-    [SerializeField] private int damageAmount = 2; // Sát thương gây ra (2 = 1 tim)
-    [SerializeField] private float fallDelay = 0.5f; // Thời gian chờ trước khi rơi
-    [SerializeField] private float shakeMagnitude = 0.05f; // Độ rung
+    [SerializeField] private bool dealsDamage = true;
+    [SerializeField] private int damageAmount = 2;
+    [SerializeField] private float fallDelay = 0.5f;
+    [SerializeField] private float shakeMagnitude = 0.05f;
 
     private Rigidbody2D rb;
+    private PolygonCollider2D polyCollider;
     private bool isTriggered = false;
     private Vector3 initialPosition;
 
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
+        polyCollider = GetComponent<PolygonCollider2D>();
         initialPosition = transform.position;
     }
 
-    // Hàm này được gọi khi có đối tượng đi vào vùng Trigger
     private void OnTriggerEnter2D(Collider2D collision)
     {
-        // Kiểm tra xem có phải là Player không và bẫy chưa được kích hoạt
         if (collision.CompareTag("Player") && !isTriggered)
         {
             isTriggered = true;
-            StartCoroutine(FallSequence());
+            // THAY ĐỔI 1: Truyền thông tin của đối tượng va chạm (Player) vào Coroutine
+            StartCoroutine(FallSequence(collision));
         }
     }
 
-    private IEnumerator FallSequence()
+    // THAY ĐỔI 2: Coroutine giờ sẽ nhận Collider của Player
+    private IEnumerator FallSequence(Collider2D playerCollider)
     {
-        // Rung nhẹ trước khi rơi
         float timer = 0;
         while (timer < fallDelay)
         {
@@ -42,22 +44,37 @@ public class IcicleTrap : MonoBehaviour
 
         transform.position = initialPosition;
 
-        // Kích hoạt trọng lực để cột băng rơi xuống
+        polyCollider.isTrigger = false;
         rb.bodyType = RigidbodyType2D.Dynamic;
+
+        // THAY ĐỔI 3 (QUAN TRỌNG): Tạm thời bỏ qua va chạm với người chơi để nó rơi xuyên qua
+        if (playerCollider != null)
+        {
+            Physics2D.IgnoreCollision(polyCollider, playerCollider, true);
+        }
     }
 
-    // Hàm này được gọi khi cột băng va chạm vật lý với đối tượng khác
+    // Dán để thay thế cho hàm OnCollisionEnter2D cũ trong IcicleTrap.cs
+
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        // Gây sát thương nếu va vào Player
-        if (collision.gameObject.CompareTag("Player"))
+        // Dòng log này sẽ chạy cho MỌI va chạm vật lý
+        Debug.Log("Đã va chạm vật lý với đối tượng tên: '" + collision.gameObject.name + "', có Tag là: '" + collision.gameObject.tag + "'");
+
+        // Gây sát thương nếu va vào Player (và nếu được bật)
+        if (dealsDamage && collision.gameObject.CompareTag("Player"))
         {
             HealthManager.instance.TakeDamage(damageAmount);
         }
 
-        // Sau khi va chạm (với Player hoặc đất), cột băng sẽ biến mất
-        // Bạn có thể thêm hiệu ứng vỡ tan ở đây
-        Debug.Log("Cột băng đã va chạm và biến mất!");
-        Destroy(gameObject);
+        // Kiểm tra va chạm với nền đất (Tilemap của bạn nên có Tag này)
+        if (collision.gameObject.CompareTag("Ground"))
+        {
+            // DÒNG LOG MỚI: Ghi nhận va chạm cụ thể với Ground/Tilemap
+            Debug.Log("Cột băng đã va chạm với Ground (Tilemap) và sẽ bị phá hủy.");
+
+            // Phá hủy cột băng
+            Destroy(gameObject);
+        }
     }
 }

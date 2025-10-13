@@ -16,10 +16,12 @@ public class pickup : MonoBehaviour
             switch (pt)
             {
                 case pickupType.coin:
-                    GameManager.instance.IncrementCoinCount();
+                    // THAY ĐỔI Ở ĐÂY: Gọi đúng tên hàm mới trong GameManager
+                    GameManager.instance.CollectCoin();
                     break;
 
                 case pickupType.gem:
+                    // Hàm này vẫn giữ nguyên tên nên không cần sửa
                     GameManager.instance.IncrementGemCount();
                     break;
 
@@ -34,8 +36,10 @@ public class pickup : MonoBehaviour
                 Instantiate(PickupEffect, transform.position, Quaternion.identity);
             }
 
-            // Huỷ object sau 0.2s
-            Destroy(gameObject, 0.2f);
+            // Hủy object
+            // Lưu ý: nên hủy ngay lập tức và tắt renderer/collider nếu muốn có hiệu ứng trễ
+            // Destroy(gameObject, 0.2f); // Cách này có thể gây lỗi nhặt nhiều lần
+            Destroy(gameObject); // Hủy ngay lập tức sẽ an toàn hơn
         }
     }
 }

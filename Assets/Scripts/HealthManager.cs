@@ -1,110 +1,209 @@
 ﻿using UnityEngine;
-using UnityEngine.UI;
+using TMPro;
+using UnityEngine.SceneManagement;
 
-public class HealthManager : MonoBehaviour
+public class GameManager : MonoBehaviour
 {
-    public static HealthManager instance;
+    public static GameManager instance;
 
-    public int MaxHealth = 6;
-    public int currentHealth;
+    private TMP_Text coinText;
+    private TMP_Text gemText;
 
-    [Header("Lives")]
-    public int maxLives = 3;
-    public int currentLives;
+    [SerializeField] private GameObject levelCompletePanel;
+    [SerializeField] private GameObject[] stars;
+    [SerializeField] private PlayerController playerController;
 
-    [Header("Heart UI")]
-    [SerializeField] private Image[] hearts;
-    [SerializeField] private Sprite FullHeartSprite;
-    [SerializeField] private Sprite HalfHeartSprite;
-    [SerializeField] private Sprite EmptyHeartSprite;
+    private int totalCoinCount = 0;
+    private int totalGemCount = 0;
 
-    [Header("UI Panels")]
-    [SerializeField] private GameObject GameOverPanel;
+    private int coinsCollectedThisLevel = 0;
+    private int totalCoinsInThisLevel = 0;
 
-    private GameObject player;
+    public Vector3 playerStartPosition;
 
     private void Awake()
     {
+        if (instance != null && instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
         instance = this;
+        DontDestroyOnLoad(gameObject);
+
+        SceneManager.sceneLoaded += OnSceneLoaded;
+
+        totalCoinCount = PlayerPrefs.GetInt("TotalCoins", 0);
+        totalGemCount = PlayerPrefs.GetInt("TotalGems", 0);
     }
 
-    private void Start()
+    private void OnDestroy()
     {
-        player = FindObjectOfType<PlayerController>()?.gameObject;
-        currentHealth = MaxHealth;
-        currentLives = maxLives;
-        DisplayHearts();
-
-        if (GameOverPanel != null)
-            GameOverPanel.SetActive(false);
+        SceneManager.sceneLoaded -= OnSceneLoaded;
     }
 
-    // Dán đoạn code này để thay thế cho hàm TakeDamage() cũ của bạn
-
-    public void TakeDamage(int dmg)
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        Debug.Log($"[HealthManager] TakeDamage được gọi, dmg = {dmg}, currentHealth = {currentHealth}");
-        currentHealth -= dmg;
-        DisplayHearts();
+        coinsCollectedThisLevel = 0;
 
-        // KIỂM TRA NẾU HẾT MÁU
-        if (currentHealth <= 0)
+        totalCoinsInThisLevel = GameObject.FindGameObjectsWithTag("Coin").Length;
+        Debug.Log($"Màn chơi '{scene.name}' có tổng cộng: {totalCoinsInThisLevel} coins.");
+
+        FindReferencesAgain();
+        UpdateGUI();
+    }
+
+    private void FindReferencesAgain()
+    {
+        UIReferences uiRefs = FindObjectOfType<UIReferences>();
+        if (uiRefs != null)
         {
-            currentLives--; // Trừ đi một mạng
-            Debug.Log($"[HealthManager] Mất một mạng! Số mạng còn lại: {currentLives}");
+            coinText = uiRefs.coinText;
+            gemText = uiRefs.gemText;
+        }
+        else
+        {
+            coinText = null;
+            gemText = null;
+        }
 
-            // KIỂM TRA XEM CÒN MẠNG ĐỂ HỒI SINH KHÔNG
-            if (currentLives > 0)
+        levelCompletePanel = GameObject.Find("LevelCompletePanel");
+        if (levelCompletePanel != null)
+        {
+            levelCompletePanel.SetActive(false);
+        }
+        else
+        {
+            Debug.LogWarning("Không tìm thấy 'LevelCompletePanel' trong màn này. Hãy chắc chắn tên đối tượng là chính xác.");
+        }
+
+        playerController = FindObjectOfType<PlayerController>();
+        if (playerController != null)
+        {
+            playerStartPosition = playerController.transform.position;
+        }
+    }
+
+    public void CollectCoin()
+    {
+        coinsCollectedThisLevel++;
+        UpdateGUI();
+    }
+
+    public void AddToTotalCoins(int amount)
+    {
+        totalCoinCount += amount;
+        PlayerPrefs.SetInt("TotalCoins", totalCoinCount);
+        PlayerPrefs.Save();
+        UpdateGUI();
+    }
+
+    public void IncrementGemCount()
+    {
+        totalGemCount++;
+        PlayerPrefs.SetInt("TotalGems", totalGemCount);
+        PlayerPrefs.Save();
+        UpdateGUI();
+    }
+
+    private void UpdateGUI()
+    {
+        if (coinText != null)
+            coinText.text = "Coins: " + coinsCollectedThisLevel;
+
+        if (gemText != null)
+            gemText.text = "Gems: " + totalGemCount;
+    }
+
+    public void LevelComplete()
+    {
+        if (playerController != null)
+        {
+            playerController.enabled = false;
+        }
+
+        AddToTotalCoins(coinsCollectedThisLevel);
+
+        if (levelCompletePanel != null)
+        {
+            levelCompletePanel.SetActive(true);
+        }
+
+        foreach (var star in stars)
+        {
+            if (star != null) star.SetActive(false);
+        }
+
+        int starsEarned = 0;
+        float coinPercentage = 0f;
+
+        if (totalCoinsInThisLevel > 0)
+        {
+            coinPercentage = (float)coinsCollectedThisLevel / totalCoinsInThisLevel;
+        }
+
+        if (coinPercentage >= 1.0f)
+        {
+            starsEarned = 3;
+        }
+        else if (coinPercentage >= 0.5f)
+        {
+            starsEarned = 2;
+        }
+        else
+        {
+            starsEarned = 1;
+        }
+
+        Debug.Log($"Tỷ lệ coin: {coinPercentage * 100}%. Số sao đạt được: {starsEarned}");
+
+        for (int i = 0; i < starsEarned; i++)
+        {
+            if (i < stars.Length && stars[i] != null)
             {
-                // Nếu còn mạng -> Hồi sinh
-                Debug.Log("[HealthManager] Còn mạng, tiến hành hồi sinh...");
-                currentHealth = MaxHealth; // Hồi đầy máu
-                DisplayHearts();           // Cập nhật lại UI tim
-                RespawnPlayer();           // Đưa người chơi về vị trí ban đầu
-            }
-            else
-            {
-                // Nếu hết mạng -> Game Over
-                Debug.Log("[HealthManager] Hết mạng → Game Over!");
-                currentHealth = 0;
-                ShowGameOver();
+                stars[i].SetActive(true);
             }
         }
     }
 
-    private void ShowGameOver()
+    public void GoToNextLevel()
     {
-        if (GameOverPanel != null)
+        int currentIndex = SceneManager.GetActiveScene().buildIndex;
+        int nextIndex = currentIndex + 1;
+
+        if (nextIndex < SceneManager.sceneCountInBuildSettings)
         {
-            GameOverPanel.SetActive(true);
+            PlayerPrefs.SetInt("LastUnlockedLevel", nextIndex);
+            PlayerPrefs.Save();
+            SceneManager.LoadScene(nextIndex);
         }
-
-        if (player != null)
+        else
         {
-            player.GetComponent<Rigidbody2D>().velocity = Vector2.zero;
-            player.GetComponent<PlayerController>().enabled = false;
-        }
-
-        Time.timeScale = 0f;
-        Debug.Log("[HealthManager] Hiển thị Game Over Panel!");
-    }
-
-    public void Heal(int amount)
-    {
-        currentHealth = Mathf.Clamp(currentHealth + amount, 0, MaxHealth);
-        DisplayHearts();
-    }
-
-    private void DisplayHearts()
-    {
-        int fullHearts = currentHealth / 2;
-        bool halfHeart = currentHealth % 2 == 1;
-
-        for (int i = 0; i < hearts.Length; i++)
-        {
-            if (i < fullHearts) hearts[i].sprite = FullHeartSprite;
-            else if (halfHeart && i == fullHearts) hearts[i].sprite = HalfHeartSprite;
-            else hearts[i].sprite = EmptyHeartSprite;
+            PlayerPrefs.DeleteKey("LastUnlockedLevel");
+            SceneManager.LoadScene("Menu");
         }
     }
 
+    public void GoToShop()
+    {
+        int currentIndex = SceneManager.GetActiveScene().buildIndex;
+        int nextLevelIndex = currentIndex + 1;
+
+        PlayerPrefs.SetInt("NextLevelIndex", nextLevelIndex);
+        PlayerPrefs.SetInt("LastUnlockedLevel", nextLevelIndex);
+        PlayerPrefs.Save();
+
+        SceneManager.LoadScene("Shop");
+    }
+
+    public void ReloadLevel()
+    {
+        int currentSceneIndex = SceneManager.GetActiveScene().buildIndex;
+        SceneManager.LoadScene(currentSceneIndex);
+    }
+
+    public void BackToMenu()
+    {
+        SceneManager.LoadScene("Menu");
+    }
+}

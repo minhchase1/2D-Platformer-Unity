@@ -8,7 +8,8 @@ public class Coin : MonoBehaviour
     {
         if (collision.CompareTag("Player"))
         {
-            ScoreManager.Instance.AddScore(value);
+            // THAY ĐỔI: Gọi hàm mới để đếm coin trong màn hiện tại
+            GameManager.instance.CollectCoin();
             Destroy(gameObject);
         }
     }

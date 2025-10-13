@@ -10,11 +10,10 @@ public class ScoreManager : MonoBehaviour
 
     private void Awake()
     {
-        // Đảm bảo chỉ có 1 ScoreManager trong game
         if (Instance == null)
         {
             Instance = this;
-            DontDestroyOnLoad(gameObject); // Không bị xóa khi đổi màn
+            DontDestroyOnLoad(gameObject);
         }
         else
         {
