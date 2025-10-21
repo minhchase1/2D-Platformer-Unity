@@ -1,35 +1,31 @@
 ﻿using UnityEngine;
 using TMPro;
-using System.Collections;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+using System.Collections;
 
 public class GameManager : MonoBehaviour
 {
     public static GameManager instance;
 
-    [Header("UI Elements")]
-    [SerializeField] private TMP_Text coinText;      // Hiển thị coin HUD
-    [SerializeField] private TMP_Text gemText;       // Hiển thị gem HUD
-    [SerializeField] private GameObject levelCompletePanel;
-    [SerializeField] private TMP_Text levelCompleteTitle;
-    [SerializeField] private TMP_Text levelCompleteCoins; // Panel hiển thị coin/gem
+    private TMP_Text coinText;
+    private TMP_Text gemText;
 
-    [Header("References")]
+    [Header("Level Complete UI")]
+    [Tooltip("Panel UI sẽ hiện ra khi hoàn thành màn chơi")]
+    [SerializeField] private GameObject levelCompletePanel;
+    [Tooltip("Kéo 3 đối tượng Image của các ngôi sao vào đây theo thứ tự")]
+    [SerializeField] private GameObject[] stars;
+
     [SerializeField] private PlayerController playerController;
 
-    // ============================
-    // COINS & GEMS
-    // ============================
-    private int levelCoinCount = 0; // Vàng level hiện tại
-    private int totalCoinCount = 0; // Vàng cộng dồn
+    private int totalCoinCount = 0;
+    private int totalGemCount = 0;
 
-    private int levelGemCount = 0;  // Gem level hiện tại
-    private int totalGemCount = 0;  // Gem cộng dồn
+    private int coinsCollectedThisLevel = 0;
+    private int totalCoinsInThisLevel = 0;
 
-    private bool isGameOver = false;
     public Vector3 playerStartPosition;
-    private int totalLevelCoins = 0;
-    private int totalLevelGems = 0;
 
     private void Awake()
     {
@@ -41,10 +37,8 @@ public class GameManager : MonoBehaviour
         instance = this;
         DontDestroyOnLoad(gameObject);
 
-        Application.targetFrameRate = 60;
         SceneManager.sceneLoaded += OnSceneLoaded;
 
-        // Load tổng vàng & gem trước khi bắt đầu
         totalCoinCount = PlayerPrefs.GetInt("TotalCoins", 0);
         totalGemCount = PlayerPrefs.GetInt("TotalGems", 0);
     }
@@ -56,171 +50,136 @@ public class GameManager : MonoBehaviour
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
+        coinsCollectedThisLevel = 0;
+
+        totalCoinsInThisLevel = GameObject.FindGameObjectsWithTag("Coin").Length;
+        Debug.Log($"Màn chơi '{scene.name}' có tổng cộng: {totalCoinsInThisLevel} coins.");
+
         FindReferencesAgain();
 
-        isGameOver = false;
-        levelCoinCount = 0;
-        levelGemCount = 0;
         UpdateGUI();
-
-        FindTotalPickups();
-
-        if (UIManager.instance != null)
-            UIManager.instance.FadeFromBlack();
     }
 
     private void FindReferencesAgain()
     {
-        coinText = FindObjectOfType<TMP_Text>(); // Cần chắc chắn đúng Text hiển thị coin
-        gemText = GameObject.Find("GemText")?.GetComponent<TMP_Text>(); // Gán gemText nếu có
+        UIReferences uiRefs = FindObjectOfType<UIReferences>();
+        if (uiRefs != null)
+        {
+            coinText = uiRefs.coinText;
+            gemText = uiRefs.gemText;
+        }
+        else
+        {
+            coinText = null;
+            gemText = null;
+        }
+
         levelCompletePanel = GameObject.Find("LevelCompletePanel");
         if (levelCompletePanel != null)
+        {
+            Transform starsContainer = levelCompletePanel.transform.Find("StarsContainer");
+            if (starsContainer != null && starsContainer.childCount >= 3)
+            {
+                stars = new GameObject[starsContainer.childCount];
+                for (int i = 0; i < starsContainer.childCount; i++)
+                {
+                    stars[i] = starsContainer.GetChild(i).gameObject;
+                }
+            }
+            else
+            {
+                Debug.LogWarning("Không tìm thấy 'StarsContainer' hoặc không đủ sao bên trong.");
+            }
+
+            Button nextLevelButton = levelCompletePanel.transform.Find("ButtonsContainer/NextLevelButton").GetComponent<Button>();
+            if (nextLevelButton != null)
+            {
+                nextLevelButton.onClick.RemoveAllListeners();
+
+                string currentSceneName = SceneManager.GetActiveScene().name;
+
+                if (currentSceneName == "Level")
+                {
+                    Debug.Log($"[GameManager] Đang ở màn '{currentSceneName}', nút Next sẽ dẫn đến Shop.");
+                    nextLevelButton.onClick.AddListener(GoToShop);
+                }
+                else
+                {
+                    Debug.Log($"[GameManager] Đang ở màn '{currentSceneName}', nút Next sẽ dẫn đến màn tiếp theo.");
+                    nextLevelButton.onClick.AddListener(GoToNextLevel);
+                }
+            }
+
+            Button replayButton = levelCompletePanel.transform.Find("ButtonsContainer/ReplayButton").GetComponent<Button>();
+            if (replayButton != null)
+            {
+                replayButton.onClick.RemoveAllListeners();
+                replayButton.onClick.AddListener(ReloadLevel);
+            }
+
+            Button menuButton = levelCompletePanel.transform.Find("ButtonsContainer/MenuButton").GetComponent<Button>();
+            if (menuButton != null)
+            {
+                menuButton.onClick.RemoveAllListeners();
+                menuButton.onClick.AddListener(BackToMenu);
+            }
+
             levelCompletePanel.SetActive(false);
+        }
+        else
+        {
+            Debug.LogWarning("Không tìm thấy 'LevelCompletePanel' trong màn này.");
+        }
 
         playerController = FindObjectOfType<PlayerController>();
         if (playerController != null)
+        {
             playerStartPosition = playerController.transform.position;
+            playerController.enabled = true;
+        }
     }
-
-    private void Start()
+    public void CollectCoin()
     {
-        if (UIManager.instance != null)
-            UIManager.instance.FadeFromBlack();
-
-        if (playerController != null)
-            playerStartPosition = playerController.transform.position;
-
+        coinsCollectedThisLevel++;
         UpdateGUI();
-        FindTotalPickups();
     }
 
-    // ============================
-    // COIN / GEM COLLECTION
-    // ============================
-    public void IncrementCoinCount()
+    public void AddToTotalCoins(int amount)
     {
-        levelCoinCount++;
-        totalCoinCount++;
-
+        totalCoinCount += amount;
         PlayerPrefs.SetInt("TotalCoins", totalCoinCount);
         PlayerPrefs.Save();
-
         UpdateGUI();
     }
 
     public void IncrementGemCount()
     {
-        levelGemCount++;
         totalGemCount++;
-
         PlayerPrefs.SetInt("TotalGems", totalGemCount);
         PlayerPrefs.Save();
-
         UpdateGUI();
     }
 
     private void UpdateGUI()
     {
         if (coinText != null)
-            coinText.text = $"Coin: {levelCoinCount} | Total: {totalCoinCount}";
+            coinText.text = "Coins: " + coinsCollectedThisLevel;
 
         if (gemText != null)
-            gemText.text = $"Gem: {levelGemCount} | Total: {totalGemCount}";
+            gemText.text = "Gems: " + totalGemCount;
     }
 
-    // ============================
-    // DEATH / RESPAWN
-    // ============================
-    public void Death()
+    public void StartLevelCompleteSequence(float fadeTime)
     {
-        if (isGameOver)
-        {
-            Debug.Log("[GameManager] Bỏ qua Death() vì isGameOver = true");
-            return;
-        }
+        StartCoroutine(LevelCompleteCoroutine(fadeTime));
+    }
 
-        Debug.Log("[GameManager] Gọi Death() — Respawn bắt đầu");
-        isGameOver = true;
-
-        if (UIManager.instance != null)
-        {
-            Debug.Log("[GameManager] Gọi UIManager.DisableMobileControls() và FadeToBlack()");
-            UIManager.instance.DisableMobileControls();
-            UIManager.instance.FadeToBlack();
-        }
-
+    private IEnumerator LevelCompleteCoroutine(float fadeDuration)
+    {
         if (playerController != null)
         {
-            Debug.Log("[GameManager] Ẩn player");
-            playerController.gameObject.SetActive(false);
+            playerController.enabled = false;
         }
-
-        StartCoroutine(DeathCoroutine());
-    }
-
-
-    private IEnumerator DeathCoroutine()
-    {
-        Debug.Log("[GameManager] DeathCoroutine bắt đầu, đợi 1s...");
-        yield return new WaitForSeconds(1f);
-
-        if (playerController != null)
-        {
-            Debug.Log("[GameManager] Đặt lại vị trí player về spawn: " + playerStartPosition);
-            playerController.transform.position = playerStartPosition;
-            playerController.gameObject.SetActive(true);
-        }
-
-        yield return new WaitForSeconds(1f);
-        Debug.Log("[GameManager] Reload scene...");
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-    }
-
-
-    // ============================
-    // PICKUPS
-    // ============================
-    private void FindTotalPickups()
-    {
-        pickup[] pickups = GameObject.FindObjectsOfType<pickup>();
-        totalLevelCoins = 0;
-        totalLevelGems = 0;
-
-        foreach (pickup item in pickups)
-        {
-            if (item.pt == pickup.pickupType.coin)
-                totalLevelCoins++;
-            if (item.pt == pickup.pickupType.gem)
-                totalLevelGems++;
-        }
-    }
-
-    // ============================
-    // LEVEL COMPLETE
-    // ============================
-    public void LevelComplete()
-    {
-        if (levelCompletePanel != null)
-            levelCompletePanel.SetActive(true);
-
-        if (levelCompleteTitle != null)
-            levelCompleteTitle.text = "LEVEL COMPLETE";
-
-        if (levelCompleteCoins != null)
-        {
-            levelCompleteCoins.text =
-                $"LEVEL COINS: {levelCoinCount} / {totalLevelCoins}\n" +
-                $"LEVEL GEMS: {levelGemCount} / {totalLevelGems}\n" +
-                $"TOTAL COINS: {totalCoinCount}\n" +
-                $"TOTAL GEMS: {totalGemCount}";
-        }
-
-        StartCoroutine(FadeAndLoadNextLevel());
-    }
-
-    private IEnumerator FadeAndLoadNextLevel()
-    {
-        float fadeDuration = 0.5f;
 
         if (UIManager.instance != null)
         {
@@ -228,6 +187,62 @@ public class GameManager : MonoBehaviour
             yield return new WaitForSeconds(fadeDuration);
         }
 
+        LevelComplete();
+    }
+
+    public void LevelComplete()
+    {
+        if (playerController != null)
+        {
+            playerController.enabled = false;
+        }
+
+        AddToTotalCoins(coinsCollectedThisLevel);
+
+        if (levelCompletePanel != null)
+        {
+            levelCompletePanel.SetActive(true);
+        }
+
+        foreach (var star in stars)
+        {
+            if (star != null) star.SetActive(false);
+        }
+
+        int starsEarned = 0;
+        float coinPercentage = 0f;
+
+        if (totalCoinsInThisLevel > 0)
+        {
+            coinPercentage = (float)coinsCollectedThisLevel / totalCoinsInThisLevel;
+        }
+
+        if (coinPercentage >= 1.0f)
+        {
+            starsEarned = 3;
+        }
+        else if (coinPercentage >= 0.5f)
+        {
+            starsEarned = 2;
+        }
+        else
+        {
+            starsEarned = 1;
+        }
+
+        Debug.Log($"Tỷ lệ coin: {coinPercentage * 100}%. Số sao đạt được: {starsEarned}");
+
+        for (int i = 0; i < starsEarned; i++)
+        {
+            if (i < stars.Length && stars[i] != null)
+            {
+                stars[i].SetActive(true);
+            }
+        }
+    }
+
+    public void GoToNextLevel()
+    {
         int currentIndex = SceneManager.GetActiveScene().buildIndex;
         int nextIndex = currentIndex + 1;
 
@@ -235,21 +250,35 @@ public class GameManager : MonoBehaviour
         {
             PlayerPrefs.SetInt("LastUnlockedLevel", nextIndex);
             PlayerPrefs.Save();
-
             SceneManager.LoadScene(nextIndex);
         }
         else
         {
+            PlayerPrefs.DeleteKey("LastUnlockedLevel");
             SceneManager.LoadScene("Menu");
         }
     }
 
-    // ============================
-    // MOBILE CONTROLS
-    // ============================
-    public void DisableMobileControls()
+    public void GoToShop()
     {
-        if (UIManager.instance != null)
-            UIManager.instance.DisableMobileControls();
+        int currentIndex = SceneManager.GetActiveScene().buildIndex;
+        int nextLevelIndex = currentIndex + 2;
+
+        Debug.Log($"[GameManager] Chuẩn bị vào Shop. Sẽ lưu NextLevelIndex là: {nextLevelIndex}.");
+        PlayerPrefs.SetInt("NextLevelIndex", nextLevelIndex);
+        PlayerPrefs.Save();
+
+        SceneManager.LoadScene("Shop");
+    }
+
+    public void ReloadLevel()
+    {
+        int currentSceneIndex = SceneManager.GetActiveScene().buildIndex;
+        SceneManager.LoadScene(currentSceneIndex);
+    }
+
+    public void BackToMenu()
+    {
+        SceneManager.LoadScene("Menu");
     }
 }

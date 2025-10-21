@@ -26,9 +26,12 @@ public class EnemyPatrol : MonoBehaviour
     {
         if (collision.gameObject.CompareTag("Player"))
         {
-            // nếu Player có Health component, gây damage
-            var h = collision.gameObject.GetComponent<Health>();
-            if (h != null) h.TakeDamage(1);
+            // Sử dụng PlayerController để xử lý damage thông qua hệ thống mới
+            var playerController = collision.gameObject.GetComponent<PlayerController>();
+            if (playerController != null)
+            {
+                playerController.ApplyDamage(1);
+            }
         }
     }
 }

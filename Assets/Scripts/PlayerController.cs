@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿// PlayerController.cs - PHIÊN BẢN ĐÃ NÂNG CẤP HOÀN CHỈNH
+using UnityEngine;
 using System.Collections;
 
 [RequireComponent(typeof(Rigidbody2D))]
@@ -8,7 +9,7 @@ public class PlayerController : MonoBehaviour
     [Header("Movement")]
     public float moveSpeed = 6f;
     public float jumpForce = 14f;
-    public int maxJumps = 2;
+    public int maxJumps = 1; // Mặc định là 1, power-up sẽ cho nhảy lần 2
 
     [Header("Dash")]
     public float dashSpeed = 18f;
@@ -36,6 +37,17 @@ public class PlayerController : MonoBehaviour
     public SpriteRenderer spriteRenderer;
     private Rigidbody2D rb;
 
+    // --- BIẾN MỚI CHO POWER-UPS ---
+    [Header("Power-ups")]
+    [Tooltip("Đối tượng hình ảnh của khiên, sẽ bật/tắt")]
+    [SerializeField] private GameObject shieldVisual;
+    [Tooltip("Vùng trigger dùng để hút coin")]
+    [SerializeField] private CircleCollider2D coinMagnetCollider;
+
+    private int defaultMaxJumps; // Biến để lưu lại số lần nhảy gốc
+    private bool isShielded = false; // Biến trạng thái của khiên
+    // --- KẾT THÚC BIẾN MỚI ---
+
     private float moveInput;
     private bool isGrounded;
     private int jumpsLeft;
@@ -49,7 +61,15 @@ public class PlayerController : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         if (animator == null) animator = GetComponent<Animator>();
         if (spriteRenderer == null) spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+
+        // --- CẬP NHẬT HÀM AWAKE ---
+        defaultMaxJumps = maxJumps; // Lưu lại số lần nhảy ban đầu
         jumpsLeft = maxJumps;
+
+        // Tắt các hiệu ứng power-up khi bắt đầu game
+        if (shieldVisual != null) shieldVisual.SetActive(false);
+        if (coinMagnetCollider != null) coinMagnetCollider.enabled = false;
+        // --- KẾT THÚC CẬP NHẬT ---
 
         if (groundCheck == null)
         {
@@ -79,7 +99,7 @@ public class PlayerController : MonoBehaviour
             if (isWallSliding)
             {
                 int dir = isFacingRight ? -1 : 1;
-                rb.velocity = new Vector2(dir * wallJumpHorizontal, wallJumpVertical);
+                rb.linearVelocity = new Vector2(dir * wallJumpHorizontal, wallJumpVertical);
                 isWallSliding = false;
                 jumpsLeft = maxJumps - 1;
             }
@@ -106,11 +126,17 @@ public class PlayerController : MonoBehaviour
     {
         if (isDashing) return;
 
-        rb.velocity = new Vector2(moveInput * moveSpeed, rb.velocity.y);
+        if (moveInput != 0)
+        {
+            rb.linearVelocity = new Vector2(moveInput * moveSpeed, rb.linearVelocity.y);
+        }
 
-        bool wasGrounded = isGrounded;
         isGrounded = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
-        if (isGrounded && !wasGrounded) jumpsLeft = maxJumps;
+
+        if (isGrounded)
+        {
+            jumpsLeft = maxJumps;
+        }
 
         RaycastHit2D hit = Physics2D.Raycast(
             wallCheck.position,
@@ -123,20 +149,17 @@ public class PlayerController : MonoBehaviour
         if (!isGrounded && isWallAdjacent && moveInput != 0 && enableWallSlide)
         {
             isWallSliding = true;
-            rb.velocity = new Vector2(rb.velocity.x, Mathf.Clamp(rb.velocity.y, wallSlideSpeed, float.MaxValue));
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, Mathf.Clamp(rb.linearVelocity.y, wallSlideSpeed, float.MaxValue));
         }
         else isWallSliding = false;
 
         if (moveInput > 0 && !isFacingRight) Flip();
         if (moveInput < 0 && isFacingRight) Flip();
-
-        // Dòng Debug đã được vô hiệu hóa
-        // Debug.Log($"[GroundCheck] grounded={isGrounded}, groundCheckPos={groundCheck.position}, radius={groundCheckRadius}, layer=8");
     }
 
     private void Jump(Vector2 force)
     {
-        rb.velocity = new Vector2(rb.velocity.x, 0f);
+        rb.linearVelocity = new Vector2(rb.linearVelocity.x, 0f);
         rb.AddForce(force, ForceMode2D.Impulse);
         jumpsLeft--;
     }
@@ -153,7 +176,7 @@ public class PlayerController : MonoBehaviour
         float start = Time.time;
         while (Time.time < start + dashDuration)
         {
-            rb.velocity = new Vector2(dir * dashSpeed, 0f);
+            rb.linearVelocity = new Vector2(dir * dashSpeed, 0f);
             yield return null;
         }
 
@@ -170,7 +193,7 @@ public class PlayerController : MonoBehaviour
         animator.SetFloat("Speed", Mathf.Abs(moveInput));
         animator.SetBool("isGrounded", isGrounded);
         animator.SetBool("isWallSliding", isWallSliding);
-        animator.SetFloat("VerticalSpeed", rb.velocity.y);
+        animator.SetFloat("VerticalSpeed", rb.linearVelocity.y);
         animator.SetBool("isDashing", isDashing);
     }
 
@@ -180,22 +203,110 @@ public class PlayerController : MonoBehaviour
         spriteRenderer.flipX = !spriteRenderer.flipX;
     }
 
-    public void Die()
+    // --- PHẦN LOGIC SÁT THƯƠNG VÀ POWER-UPS MỚI ---
+
+    // Hàm nhận sát thương mới, kiểm tra khiên trước
+    public void ApplyDamage(int damageAmount)
     {
-        Debug.Log("[PlayerController] Player chết - Gọi TakeDamage");
+        if (isShielded)
+        {
+            isShielded = false; // Tắt trạng thái khiên
+            if (shieldVisual != null) shieldVisual.SetActive(false); // Tắt hình ảnh khiên
+            Debug.Log("Khiên đã đỡ một lần sát thương!");
+            // Dừng coroutine đang chạy để tránh lỗi không mong muốn
+            StopCoroutine(ShieldCoroutine());
+            return; // Dừng lại, không nhận sát thương
+        }
+
+        // Nếu không có khiên, gọi hàm xử lý máu của bạn
         if (HealthManager.instance != null)
         {
-            // Trừ toàn bộ máu còn lại để kích hoạt Game Over
-            HealthManager.instance.TakeDamage(HealthManager.instance.currentHealth);
+            HealthManager.instance.TakeDamage(damageAmount);
         }
     }
 
+    // Hàm Die() cũ giờ sẽ gọi qua hệ thống sát thương mới
+    public void Die()
+    {
+        Debug.Log("[PlayerController] Player chết - Gọi ApplyDamage");
+        // Gây một lượng sát thương cực lớn để đảm bảo người chơi chết
+        ApplyDamage(999);
+    }
+
+    // Hàm trung tâm nhận tín hiệu từ script PowerUp
+    public void ActivatePowerUp(PowerUp.PowerUpType type, float duration)
+    {
+        // Dừng tất cả các coroutine power-up cũ để làm mới thời gian
+        StopAllCoroutines();
+        // Sau khi dừng, phải chạy lại coroutine Dash nếu đang lướt
+        if (isDashing) StartCoroutine(DoDash());
+
+        // Kích hoạt coroutine mới dựa trên loại power-up
+        if (type == PowerUp.PowerUpType.DoubleJump)
+        {
+            StartCoroutine(DoubleJumpCoroutine(duration));
+        }
+        else if (type == PowerUp.PowerUpType.Shield)
+        {
+            StartCoroutine(ShieldCoroutine());
+        }
+        else if (type == PowerUp.PowerUpType.CoinMagnet)
+        {
+            StartCoroutine(CoinMagnetCoroutine(duration));
+        }
+    }
+
+    // Coroutine xử lý hiệu ứng Double Jump
+    private IEnumerator DoubleJumpCoroutine(float duration)
+    {
+        Debug.Log("Power-up: Double Jump ĐÃ KÍCH HOẠT!");
+        maxJumps = 2; // Cho phép nhảy 2 lần
+        yield return new WaitForSeconds(duration); // Chờ hết thời gian
+        maxJumps = defaultMaxJumps; // Trả về số lần nhảy gốc
+        Debug.Log("Power-up: Double Jump ĐÃ HẾT HẠN!");
+    }
+
+    // Coroutine xử lý hiệu ứng Khiên
+    private IEnumerator ShieldCoroutine()
+    {
+        Debug.Log("Power-up: Khiên ĐÃ KÍCH HOẠT!");
+        isShielded = true;
+        if (shieldVisual != null) shieldVisual.SetActive(true);
+        yield return null; // Khiên không cần thời gian, nó sẽ tồn tại cho đến khi bị phá
+    }
+
+    // Coroutine xử lý hiệu ứng Nam châm hút Coin
+    private IEnumerator CoinMagnetCoroutine(float duration)
+    {
+        Debug.Log("Power-up: Nam châm ĐÃ KÍCH HOẠT!");
+        if (coinMagnetCollider != null) coinMagnetCollider.enabled = true;
+        yield return new WaitForSeconds(duration); // Chờ hết thời gian
+        if (coinMagnetCollider != null) coinMagnetCollider.enabled = false;
+        Debug.Log("Power-up: Nam châm ĐÃ HẾT HẠN!");
+    }
+
+    // Xử lý va chạm
     private void OnTriggerEnter2D(Collider2D collision)
     {
         if (collision.CompareTag("KillZone"))
         {
             Debug.Log("[PlayerController] Va chạm KillZone -> Gọi Die()");
             Die();
+        }
+
+        // Ví dụ: Nếu bạn có kẻ thù với tag "Enemy" và chúng là trigger
+        if (collision.CompareTag("Enemy"))
+        {
+            ApplyDamage(1); // Gây 1 sát thương
+        }
+    }
+
+    // Thêm hàm này nếu kẻ thù của bạn dùng va chạm vật lý (không phải trigger)
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("Enemy"))
+        {
+            ApplyDamage(1); // Gây 1 sát thương
         }
     }
 }

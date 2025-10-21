@@ -21,7 +21,7 @@ public class FloatingObject : MonoBehaviour
 			rb.AddForce(Vector2.up * floatStrength, ForceMode2D.Force);
 
 			// Giảm vận tốc rơi để mô phỏng nước
-			rb.velocity = new Vector2(rb.velocity.x * (1 - damping), rb.velocity.y * 0.8f);
+			rb.linearVelocity = new Vector2(rb.linearVelocity.x * (1 - damping), rb.linearVelocity.y * 0.8f);
 		}
 	}
 

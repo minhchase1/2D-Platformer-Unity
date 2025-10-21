@@ -26,6 +26,13 @@ public class HealthManager : MonoBehaviour
     private void Awake()
     {
         instance = this;
+
+        // KIỂM TRA NÂNG CẤP TỪ CỬA HÀNG
+        if (PlayerPrefs.GetInt("ExtraLifePurchased", 0) == 1)
+        {
+            maxLives += 1; // Cộng thêm 1 mạng nếu đã mua
+            Debug.Log("Nâng cấp +1 mạng đã được áp dụng! Tổng số mạng: " + maxLives);
+        }
     }
 
     private void Start()
@@ -81,7 +88,7 @@ public class HealthManager : MonoBehaviour
 
         if (player != null)
         {
-            player.GetComponent<Rigidbody2D>().velocity = Vector2.zero;
+            player.GetComponent<Rigidbody2D>().linearVelocity = Vector2.zero;
             player.GetComponent<PlayerController>().enabled = false;
         }
 

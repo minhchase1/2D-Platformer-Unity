@@ -9,6 +9,7 @@ TagManager:
   - DeathZone
   - KillZone
   - Ground
+  - Enemy
   layers:
   - Default
   - TransparentFX
@@ -69,4 +70,7 @@ TagManager:
     locked: 0
   - name: Player
     uniqueID: 3775889879
+    locked: 0
+  - name: Foreground
+    uniqueID: 754582115
     locked: 0
